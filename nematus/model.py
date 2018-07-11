@@ -91,7 +91,7 @@ class Decoder(object):
                                             dropout_input=dropout_hidden)
             with tf.name_scope("outer"):
                 self.outer = FeedForwardLayer(
-                                        in_size=config.state_size,
+                                        in_size=config.embedding_size,
                                         out_size=config.embedding_size,
                                         batch_size=batch_size,
                                         non_linearity=lambda y: y,
@@ -187,9 +187,11 @@ class Decoder(object):
         states, attended_states = RecurrentLayer(
                                     initial_state=init_state_att_ctx,
                                     step_fn=step_fn).forward((gates_x, proposal_x))
-        #residual self-attention
-        initializer = 0
-        def find_alphas(prev, content_scope):
+        #residual self-attentioni
+	print self.embedding_size
+        initializer = tf.zeros([tf.shape(self.init_state)[0],self.embedding_size], tf.float32)
+        print initializer.shape
+	def find_alphas(prev, content_scope):
             content = content_scope[0]
             scope = content_scope[1]
             prev_res = prev
@@ -199,15 +201,15 @@ class Decoder(object):
                 score = self.outer.forward(tf.nn.tanh(inner_content + inner_scope))
             else:
                 score = self.outer.forward(tf.nn.tanh(inner_content))
-            alpha = tf.nn.softmax(score)
-            current_res = alpha * content
+	    alpha = tf.nn.softmax(score)
+       	    current_res = alpha * content
             res = (prev_res + current_res)
             return (res)
         
-        residual_states = tf.scan(fn=self.find_alphas,
+        residual_states = tf.scan(fn=find_alphas,
                          elems=(y_embs, states),
                          initializer= initializer)
-        logits = self.predictor.get_logits(alphas, states, attended_states, multi_step=True)
+        logits = self.predictor.get_logits(residual_states, states, attended_states, multi_step=True)
         return logits
 
 class Predictor(object):
